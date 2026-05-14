@@ -2,6 +2,7 @@ import type { Channel } from "amqplib";
 import { connect } from "amqplib";
 import type { Order } from "../../../domain/Order.js";
 import type { OrderMessagePublisher } from "../../../domain/ports/OrderMessagePublisher.js";
+import { assertOrderEventsQueues } from "../../../config/assertOrderEventsQueues.js";
 import { ORDER_EVENTS_QUEUE } from "../../../config/queuesConstants.js";
 import { RABBITMQ_URL } from "../../../config/env.js";
 
@@ -12,7 +13,7 @@ async function getChannel(): Promise<Channel> {
   if (channel) return channel;
   const connection = await connect(RABBITMQ_URL);
   const localChannel = await connection.createChannel();
-  await localChannel.assertQueue(ORDER_EVENTS_QUEUE, { durable: true });
+  await assertOrderEventsQueues(localChannel);
   channel = localChannel;
   return localChannel;
 }

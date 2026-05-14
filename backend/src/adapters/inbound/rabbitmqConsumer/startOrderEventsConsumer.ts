@@ -1,6 +1,7 @@
 import { connect } from "amqplib";
 import type { ChannelModel } from "amqplib";
-import { ORDER_EVENTS_QUEUE } from "../../../config/queuesConstants.js";
+import { assertOrderEventsQueues } from "../../../config/assertOrderEventsQueues.js";
+import { ORDER_EVENTS_DLQ, ORDER_EVENTS_QUEUE } from "../../../config/queuesConstants.js";
 import { RABBITMQ_URL } from "../../../config/env.js";
 
 export async function startOrderEventsConsumer(): Promise<void> {
@@ -10,15 +11,23 @@ export async function startOrderEventsConsumer(): Promise<void> {
     connection = await connect(RABBITMQ_URL);
     const channel = await connection.createChannel();
 
-    await channel.assertQueue(ORDER_EVENTS_QUEUE, { durable: true });
+    await assertOrderEventsQueues(channel);
 
     channel.consume(ORDER_EVENTS_QUEUE, (msg) => {
       if (!msg) return;
-      console.log("[consumer] order event:", msg.content.toString());
+      const raw = msg.content.toString();
+      try {
+        JSON.parse(raw);
+      } catch {
+        console.error("[consumer] invalid JSON → DLQ:", raw);
+        channel.nack(msg, false, false);
+        return;
+      }
+      console.log("[consumer] order event:", raw);
       channel.ack(msg);
     });
 
-    console.log("[consumer] listening on", ORDER_EVENTS_QUEUE);
+    console.log("[consumer] listening on", ORDER_EVENTS_QUEUE, "(DLQ:", ORDER_EVENTS_DLQ + ")");
   } catch (error) {
     console.error("[consumer] failed:", error);
 
